@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master # Triggers when code is pushed to the main branch
+  pull_request:
+    branches:
+      - master
+jobs:
+  release:
+    permissions:
+      packages: write
+      contents: write
+      issues: write
+      deployments: write
+    runs-on: ubuntu-latest # Runs on an Ubuntu runner
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Test with pytest
+        run: |
+          pip install pytest pytest-cov
+          python -m pytest tests/unit_tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          # You can specify specifying version range for the extra plugins if you prefer.
+          extra_plugins: |
+            @semantic-release/changelog@6.0.0
+            @semantic-release/git
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        if: ${{ github.event_name != 'pull_request' && steps.semantic.outputs.new_release_published }}
+        uses: docker/build-push-action@v6
+        with:
+          context: src
+          tags: ghcr.io/jhparker7/blueprints:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/blueprints:latest
