@@ -46,4 +46,5 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: src
+          push: true
           tags: ghcr.io/jhparker7/blueprints:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/blueprints:latest
