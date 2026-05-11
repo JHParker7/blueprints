@@ -42,8 +42,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
+        if: ${{ github.event_name != 'pull_request' && steps.semantic.outputs.new_release_published }}
         uses: docker/build-push-action@v6
         with:
           context: src
-          push: ${{ github.event_name != 'pull_request' && steps.semantic.outputs.new_release_published }}
           tags: ghcr.io/jhparker7/blueprints:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/blueprints:latest
