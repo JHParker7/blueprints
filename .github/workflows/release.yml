@@ -45,5 +45,5 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: src
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && steps.sematic.outputs.new_release_published }}
           tags: ghcr.io/jhparker7/blueprints:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/blueprints:latest
