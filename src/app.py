@@ -26,6 +26,7 @@ DATABASE_URL = os.getenv(
 )
 TEMPO_ENDPOINT = os.getenv("TEMPO_ENDPOINT", "http://localhost:4318")
 LOKI_URL = os.getenv("LOKI_URL", "http://localhost:3100")
+TELEMETRY_ENABLED = os.getenv("TELEMETRY_ENABLED", "true").lower() == "true"
 
 
 # ── Tracing ──────────────────────────────────────────────────────────────────
@@ -40,7 +41,8 @@ def _setup_tracing() -> None:
     RequestsInstrumentor().instrument()
 
 
-_setup_tracing()
+if TELEMETRY_ENABLED:
+    _setup_tracing()
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -59,14 +61,6 @@ def _setup_logging() -> logging.Logger:
         '{"time":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"'
         ',"trace_id":"%(trace_id)s","span_id":"%(span_id)s"}'
     )
-    loki_handler = logging_loki.LokiQueueHandler(
-        Queue(-1),
-        url=f"{LOKI_URL}/loki/api/v1/push",
-        tags={"service": "blueprints"},
-        version="1",
-    )
-    loki_handler.addFilter(_TraceContextFilter())
-    loki_handler.setFormatter(fmt)
 
     stream_handler = logging.StreamHandler()
     stream_handler.addFilter(_TraceContextFilter())
@@ -74,8 +68,19 @@ def _setup_logging() -> logging.Logger:
 
     logger = logging.getLogger("blueprints")
     logger.setLevel(logging.INFO)
-    logger.addHandler(loki_handler)
     logger.addHandler(stream_handler)
+
+    if TELEMETRY_ENABLED:
+        loki_handler = logging_loki.LokiQueueHandler(
+            Queue(-1),
+            url=f"{LOKI_URL}/loki/api/v1/push",
+            tags={"service": "blueprints"},
+            version="1",
+        )
+        loki_handler.addFilter(_TraceContextFilter())
+        loki_handler.setFormatter(fmt)
+        logger.addHandler(loki_handler)
+
     return logger
 
 

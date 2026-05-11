@@ -1,4 +1,7 @@
 """Shared fixtures for unit tests."""
+import os
+os.environ.setdefault("TELEMETRY_ENABLED", "false")
+
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
