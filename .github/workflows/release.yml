@@ -41,6 +41,13 @@ jobs:
             @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GHCR
+        if: ${{ github.event_name != 'pull_request' && steps.semantic.outputs.new_release_published }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
         if: ${{ github.event_name != 'pull_request' && steps.semantic.outputs.new_release_published }}
         uses: docker/build-push-action@v6
