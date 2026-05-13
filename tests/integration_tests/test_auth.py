@@ -1,7 +1,8 @@
 """Integration tests for authentication flows."""
 import requests
+import os
 
-GATEKEEPER_URL = "http://localhost:8080"
+GATEKEEPER_URL = os.getenv("GATEKEEPER_URL","http://localhost:8080")
 
 EMAIL = "auth_integration_test@example.com"
 PASSWORD = "auth_integration_pass"
