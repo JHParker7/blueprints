@@ -2,12 +2,13 @@
 import base64
 import json
 import uuid
+import os
 
 import pytest
 import requests
 
-BLUEPRINTS_URL = "http://localhost:8081"
-GATEKEEPER_URL = "http://localhost:8080"
+BLUEPRINTS_URL = os.getenv("BLUEPRINTS_URL","http://localhost:8081")
+GATEKEEPER_URL = os.getenv("GATEKEEPER_URL","http://localhost:8080")
 
 EMAIL = "tf_backend_test@example.com"
 PASSWORD = "tf_backend_pass"

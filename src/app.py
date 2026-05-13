@@ -56,11 +56,20 @@ class _TraceContextFilter(logging.Filter):
         return True
 
 
+class _JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        super().format(record)
+        return json.dumps({
+            "time": self.formatTime(record),
+            "level": record.levelname,
+            "msg": record.getMessage(),
+            "trace_id": getattr(record, "trace_id", ""),
+            "span_id": getattr(record, "span_id", ""),
+        })
+
+
 def _setup_logging() -> logging.Logger:
-    fmt = logging.Formatter(
-        '{"time":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"'
-        ',"trace_id":"%(trace_id)s","span_id":"%(span_id)s"}'
-    )
+    fmt = _JsonFormatter()
 
     stream_handler = logging.StreamHandler()
     stream_handler.addFilter(_TraceContextFilter())
