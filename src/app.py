@@ -81,6 +81,9 @@ def _setup_logging() -> logging.Logger:
         loki_handler.setFormatter(fmt)
         logger.addHandler(loki_handler)
 
+        uvicorn_access_logger = logging.getLogger("uvicorn.access")
+        uvicorn_access_logger.addHandler(loki_handler)
+
     return logger
 
 
