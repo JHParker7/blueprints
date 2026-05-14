@@ -1,0 +1,294 @@
+openapi: 3.1.0
+info:
+  title: Blueprints — Terraform HTTP Backend
+  description: |
+    Self-hosted Terraform HTTP backend that stores, locks, and manages Terraform state in PostgreSQL.
+
+    ## Authentication
+
+    All endpoints (except `/metrics`) require authentication via one of:
+    - **Bearer token**: `Authorization: Bearer <token>`
+    - **HTTP Basic auth**: `Authorization: Basic <base64(email:password)>` — credentials are
+      exchanged with the Gatekeeper service for a token on each request.
+
+    ## Custom HTTP Methods
+
+    Terraform's HTTP backend protocol uses the non-standard HTTP methods `LOCK` and `UNLOCK`
+    for workspace locking. OpenAPI does not support custom HTTP methods as first-class path item
+    operations, so they are documented here using `x-lock` and `x-unlock` extensions on the
+    `/state/{workspace}` path item.
+  version: 1.0.0
+  contact:
+    email: jhp1403@gmail.com
+
+servers:
+  - url: http://localhost:8081
+    description: Local development server
+
+security:
+  - bearerAuth: []
+  - basicAuth: []
+
+paths:
+  /state/{workspace}:
+    parameters:
+      - name: workspace
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Terraform workspace name
+        example: default
+
+    get:
+      summary: Get Terraform state
+      operationId: getState
+      description: |
+        Returns the current Terraform state for the given workspace.
+        Returns 204 if no state has been stored yet.
+      responses:
+        '200':
+          description: Terraform state JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TerraformState'
+        '204':
+          description: No state exists for this workspace
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Update Terraform state
+      operationId: updateState
+      description: |
+        Create or replace the Terraform state for the given workspace.
+        If the `ID` query parameter is provided and the workspace is locked with a
+        different lock ID, the request is rejected with 409 and the current lock info
+        is returned in the response body.
+      parameters:
+        - name: ID
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Lock ID — must match the current lock if the workspace is locked
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TerraformState'
+      responses:
+        '200':
+          description: State updated successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Lock ID mismatch — workspace is locked with a different ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockInfo'
+
+    delete:
+      summary: Delete Terraform state
+      operationId: deleteState
+      description: Delete the stored state for the given workspace.
+      responses:
+        '200':
+          description: State deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    x-lock:
+      summary: Lock workspace
+      operationId: lockState
+      description: |
+        Acquire an exclusive lock on the workspace using the non-standard HTTP method `LOCK`.
+        Returns 423 with the existing lock info if the workspace is already locked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LockInfo'
+      responses:
+        '200':
+          description: Lock acquired successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '423':
+          description: Workspace is already locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockInfo'
+
+    x-unlock:
+      summary: Unlock workspace
+      operationId: unlockState
+      description: |
+        Release the lock on the workspace using the non-standard HTTP method `UNLOCK`.
+        If a lock body is provided and its `ID` does not match the current lock, returns 409.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LockInfo'
+      responses:
+        '200':
+          description: Workspace unlocked successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Lock ID mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      operationId: getMetrics
+      description: Prometheus-format metrics exposed by prometheus-fastapi-instrumentator. No authentication required.
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics in text exposition format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token issued by the Gatekeeper service
+    basicAuth:
+      type: http
+      scheme: basic
+      description: |
+        Email and password — exchanged with the Gatekeeper `/login` endpoint for a bearer
+        token on every request.
+
+  schemas:
+    TerraformState:
+      type: object
+      description: Terraform state file (https://developer.hashicorp.com/terraform/language/state)
+      required:
+        - version
+        - terraform_version
+        - serial
+        - lineage
+      properties:
+        version:
+          type: integer
+          example: 4
+        terraform_version:
+          type: string
+          example: "1.5.0"
+        serial:
+          type: integer
+          description: Monotonically increasing integer incremented on every state change
+          example: 3
+        lineage:
+          type: string
+          format: uuid
+          description: Unique identifier assigned when the state is first created
+          example: "abc123de-f456-7890-abcd-ef1234567890"
+        outputs:
+          type: object
+          additionalProperties: true
+        resources:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    LockInfo:
+      type: object
+      description: Terraform workspace lock metadata
+      required:
+        - ID
+        - Operation
+        - Who
+        - Version
+        - Created
+      properties:
+        ID:
+          type: string
+          format: uuid
+          description: Unique lock identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        Operation:
+          type: string
+          description: Terraform operation that acquired the lock
+          example: "OperationTypePlan"
+        Who:
+          type: string
+          description: Identity of the lock holder (user@host)
+          example: "alice@terraform-host"
+        Info:
+          type: string
+          description: Optional additional information
+          example: ""
+        Version:
+          type: string
+          description: Terraform version that acquired the lock
+          example: "1.5.0"
+        Created:
+          type: string
+          format: date-time
+          description: Timestamp when the lock was acquired
+          example: "2026-05-14T10:00:00Z"
+        Path:
+          type: string
+          description: Optional state path
+          example: ""
+
+    ErrorDetail:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "Lock ID mismatch"
+
+  responses:
+    Unauthorized:
+      description: Authentication credentials missing or invalid
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          example: Basic
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            detail: "Not authenticated"
+
+    Forbidden:
+      description: Insufficient permissions for this resource/action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            detail: "Forbidden"
