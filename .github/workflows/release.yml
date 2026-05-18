@@ -86,4 +86,4 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: tests/integration_tests
           push: true
-          tags: ghcr.io/jhparker7/gatekeeper-tests:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/gatekeeper-tests:latest
+          tags: ghcr.io/jhparker7/blueprints-tests:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/blueprints-tests:latest
