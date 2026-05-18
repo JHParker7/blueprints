@@ -55,3 +55,11 @@ jobs:
           context: src
           push: true
           tags: ghcr.io/jhparker7/blueprints:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/blueprints:latest
+
+      - name: Build and push integration tests
+        uses: docker/build-push-action@v6
+        with:
+          context: tests/integration_tests
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/jhparker7/gatekeeper-tests:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/gatekeeper-tests:latest
