@@ -3,19 +3,14 @@ name: Release
 on:
   push:
     branches:
-      - master # Triggers when code is pushed to the main branch
+      - master
   pull_request:
     branches:
       - master
-jobs:
-  release:
-    permissions:
-      packages: write
-      contents: write
-      issues: write
-      deployments: write
-    runs-on: ubuntu-latest # Runs on an Ubuntu runner
 
+jobs:
+  test:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -31,16 +26,44 @@ jobs:
         run: |
           pip install pytest pytest-cov
           python -m pytest tests/unit_tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
+
+  release:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      deployments: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
       - name: Semantic Release
         id: semantic
         uses: cycjimmy/semantic-release-action@v6
         with:
-          # You can specify specifying version range for the extra plugins if you prefer.
           extra_plugins: |
             @semantic-release/changelog@6.0.0
             @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
         if: ${{ github.event_name != 'pull_request' && steps.semantic.outputs.new_release_published }}
         uses: docker/login-action@v3
@@ -52,6 +75,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' && steps.semantic.outputs.new_release_published }}
         uses: docker/build-push-action@v6
         with:
+          platforms: linux/amd64,linux/arm64
           context: src
           push: true
           tags: ghcr.io/jhparker7/blueprints:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/blueprints:latest
@@ -59,7 +83,7 @@ jobs:
       - name: Build and push integration tests
         uses: docker/build-push-action@v6
         with:
-          context: tests/integration_tests
           platforms: linux/amd64,linux/arm64
+          context: tests/integration_tests
           push: true
           tags: ghcr.io/jhparker7/gatekeeper-tests:${{ steps.semantic.outputs.new_release_version }}, ghcr.io/jhparker7/gatekeeper-tests:latest
