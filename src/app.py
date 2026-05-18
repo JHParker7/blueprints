@@ -326,4 +326,11 @@ async def tf_unlock_state(
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8081)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8081,
+        ssl_certfile=os.getenv("TLS_CERT_FILE"),
+        ssl_keyfile=os.getenv("TLS_KEY_FILE"),
+        ssl_ca_certs=os.getenv("CA_CERT_FILE"),
+    )
